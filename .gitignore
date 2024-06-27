@@ -1,4 +1,9 @@
-# Environment files
-node_modules
+# Virtual Environment
+venv
+
+# Environment variables
 .env
-config.json
+database.json
+
+# Caches
+__pycache__
