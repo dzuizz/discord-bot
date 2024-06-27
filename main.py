@@ -1,11 +1,10 @@
 from responses import lonely_chat
 from dotenv import load_dotenv
-from typing import Final
+from typing import Final, Any
 
 import discord
 import json
 import os
-
 
 # ENVIRONMENT VARIABLES
 load_dotenv()
@@ -19,12 +18,50 @@ client: discord.Client = discord.Client(intents=intents)
 tree = discord.app_commands.CommandTree(client)
 
 
-def update(data: dict) -> dict:
+# SCORING FUNCTIONALITY
+def score(message: str) -> int:  # TODO - Improve scoring algorithm
+    return len(message)
+
+
+def get_rank(exp: int) -> int:  # TODO - Improve ranking algorithm
+    return exp // 100
+
+
+# DATABASE FUNCTIONALITY
+def get_database() -> dict:
+    with open('database.json', 'r') as f:
+        database = json.load(f)
+    return database
+
+
+def update_database(new_database: dict) -> dict:
     with open('database.json', 'w') as f:
-        json.dump(data, f)
+        json.dump(new_database, f, indent=4)
         f.seek(0)
 
-    return json.load(open('database.json', 'r'))
+    with open('database.json', 'r') as f:
+        database = json.load(f)
+    return database
+
+
+def get_user_data(username: str) -> dict:
+    database = get_database()
+
+    if username not in database:
+        update_user_data(username=username, user_data={"exp": 0, "rank": 0})
+        database = get_database()
+
+    return database[username]
+
+
+def update_user_data(username: str, user_data: dict) -> dict:
+    with open('database.json', 'r') as f:
+        database = json.load(f)
+
+    database[username] = user_data
+    update_database(database)
+
+    return database[username]
 
 
 # MESSAGE FUNCTIONALITY
@@ -33,28 +70,30 @@ async def process_message(message: discord.Message) -> None:
     user_message: str = message.content
 
     if not user_message:
-        print("User message is empty.")
+        print("INFO: User message is empty")
         return
 
     if is_private := user_message[0] == '?':
         user_message = user_message[1:]
 
-    data = json.load(open('database.json', 'r'))
-    data["exp"] += len(user_message)
-    data = update(data)
+    user_data = get_user_data(username)
+    user_data['exp'] += score(user_message)
+    user_data = update_user_data(username, user_data)
 
-    if username in data['lonely-list']:
+    database = get_database()
+
+    if username in database['lonely-list']:
         try:
             response: str = lonely_chat(user_message)
             await message.author.send(response) if is_private else await message.channel.send(response)
         except Exception as e:
-            print("Error in process_message:", e)
+            print("Error in processing message:", e)
 
-    new_rank: int = data["exp"] // 10
-    if data["rank"] != new_rank:
-        data["rank"] = new_rank
-        update(data)
-        response = f"Congratulations @{username}! You've reached rank {new_rank}."
+    new_rank: int = get_rank(user_data['exp'])
+    if user_data['rank'] != new_rank:
+        user_data['rank'] = new_rank
+        update_user_data(username=username, user_data=user_data)
+        response = f"Congratulations {message.author.mention}! You've reached rank {new_rank}."
         await message.author.send(response) if is_private else await message.channel.send(response)
 
 
@@ -62,7 +101,7 @@ async def process_message(message: discord.Message) -> None:
 @client.event
 async def on_ready() -> None:
     await tree.sync(guild=discord.Object(id=GUILD_ID))
-    print(f'{client.user} has connected to Discord!')
+    print(f"{client.user} has connected to Discord!")
 
 
 # HANDLING MESSAGES
@@ -78,6 +117,8 @@ async def on_message(message: discord.Message) -> None:
     print(f'[{channel}] {username}: "{user_message}"')
     await process_message(message)
 
+
+@discord.app_commands.checks.cooldown(1, 3)
 @tree.command(
     name="ping",
     description="Responds with Pong!",
@@ -87,62 +128,97 @@ async def ping(interaction: discord.interactions.Interaction) -> None:
     await interaction.response.send_message("Pong!")
 
 
+@ping.error  # Tell the user when they've got a cooldown
+async def on_test_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    if isinstance(error, discord.app_commands.CommandOnCooldown):
+        await interaction.response.send_message(str(error), ephemeral=True)
+
+
+@discord.app_commands.checks.cooldown(1, 3)
 @tree.command(
     name="chat",
     description="I'm feeling lonely. Join the club ❤️... or leave it.",
     guild=discord.Object(id=GUILD_ID)
 )
 async def chat(interaction: discord.interactions.Interaction) -> None:
-    username: str = str(interaction.user)
+    user: discord.User = interaction.user
+    username: str = str(user)
 
-    with open('database.json', 'r+') as f:
-        data = json.load(f)
+    database: dict = get_database()
 
-        if username in data['lonely-list']:
-            data['lonely-list'].remove(username)
-            response = "You've been removed from the lonely list."
-        else:
-            data["lonely-list"].append(str(interaction.user))
-            response = "You're now part of the lonely list. ❤️"
+    if username in database['lonely-list']:
+        database['lonely-list'].remove(username)
+        response = "You've been removed from the lonely list."
+    else:
+        database['lonely-list'].append(username)
+        response = "You're now part of the lonely list. ❤️"
 
-        update(data)
+    update_database(database)
 
     await interaction.response.send_message(response)
 
 
+@chat.error  # Tell the user when they've got a cooldown
+async def on_test_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    if isinstance(error, discord.app_commands.CommandOnCooldown):
+        await interaction.response.send_message(str(error), ephemeral=True)
+
+
+@discord.app_commands.checks.cooldown(1, 3)
 @tree.command(
     name="rank",
     description="Check your current rank.",
     guild=discord.Object(id=GUILD_ID)
 )
 async def rank(interaction: discord.interactions.Interaction) -> None:
-    with open('database.json', 'r') as f:
-        data = json.load(f)
+    username: str = str(interaction.user)
+    user_data = get_user_data(username)
 
-    await interaction.response.send_message(f"You're currently at rank {data['rank']}.")
+    await interaction.response.send_message(
+        f"{interaction.user.mention}, you're currently at rank {user_data['rank']}.")
 
 
+@rank.error  # Tell the user when they've got a cooldown
+async def on_test_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    if isinstance(error, discord.app_commands.CommandOnCooldown):
+        await interaction.response.send_message(str(error), ephemeral=True)
+
+
+@discord.app_commands.checks.cooldown(1, 3)
 @tree.command(
     name="stats",
     description="Check your current stats.",
     guild=discord.Object(id=GUILD_ID)
 )
 async def stats(interaction: discord.interactions.Interaction) -> None:
-    with open('database.json', 'r') as f:
-        data = json.load(f)
+    user: discord.User = interaction.user
+    username: str = str(user)
+
+    user_data: dict = get_user_data(username)
+
+    user_exp: int = user_data['exp']
+    user_rank: int = user_data['rank']
 
     response = f"""
-> **User**: {interaction.user}
-> - **Experience Points:** {data['exp']}
-> - **Rank:** {data['rank']}
+{user.mention}, here are your current stats:
+> **User**: {username}
+> - **Experience Points:** {user_exp}
+> - **Rank:** {user_rank}
+
 """
 
     await interaction.response.send_message(response)
 
 
+@stats.error  # Tell the user when they've got a cooldown
+async def on_test_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+    if isinstance(error, discord.app_commands.CommandOnCooldown):
+        await interaction.response.send_message(str(error), ephemeral=True)
+
+
 # MAIN ENTRY POINT
 def main() -> None:
-    update({"lonely-list": [], "exp": 0, "rank": 0})
+    update_database({"lonely-list": []})
 
     print("Bot is starting...")
     try:
