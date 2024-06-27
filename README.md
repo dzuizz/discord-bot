@@ -39,6 +39,7 @@ A Python implementation of a Discord bot using the `discord.py` library.
     ```ini
     DISCORD_TOKEN=your_discord_token
     GUILD_ID=your_guild_id
+    WELCOME_CHANNEL_ID=your_welcome_channel_id
     ```
 
 ### Usage
@@ -79,43 +80,23 @@ This is the main script that sets up and runs the Discord bot. Key sections incl
 - **Message Processing**: Handles user messages, updates experience points, and responds to lonely users.
 - **Commands**: Defines several bot commands using `discord.app_commands.CommandTree`.
 
-### Example Commands
+### List of (app) Commands
 
 - **/ping**
-    ```python
-    @tree.command(
-        name="ping",
-        description="Responds with Pong!",
-        guild=discord.Object(id=GUILD_ID)
-    )
-    async def ping(interaction: discord.interactions.Interaction) -> None:
-        await interaction.response.send_message("Pong!")
-    ```
-
 - **/chat**
-    ```python
-    @tree.command(
-        name="chat",
-        description="I'm feeling lonely. Join the club ❤️... or leave it.",
-        guild=discord.Object(id=GUILD_ID)
-    )
-    async def chat(interaction: discord.interactions.Interaction) -> None:
-        username: str = str(interaction.user)
+- **/rank**
+- **/exp**
+- **/messages**
+- **/stats**
 
-        with open('database.json', 'r+') as f:
-            data = json.load(f)
+### Todos
 
-            if username in data['lonely-list']:
-                data['lonely-list'].remove(username)
-                response = "You've been removed from the lonely list."
-            else:
-                data["lonely-list"].append(str(interaction.user))
-                response = "You're now part of the lonely list. ❤️"
-
-            update(data)
-
-        await interaction.response.send_message(response)
-    ```
+- **/play** (music in voice channel)
+- **/trivia**
+- **/poll**
+- **/remind**
+- **/weather**
+- **/translate**
 
 ### Contributing
 

@@ -1,5 +1,4 @@
 from random import choice, randint
-import json
 
 
 motivating_sentences = [
