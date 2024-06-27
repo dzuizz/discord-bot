@@ -50,7 +50,7 @@ async def process_message(message: discord.Message) -> None:
         except Exception as e:
             print("Error in process_message:", e)
 
-    new_rank: int = data["exp"] // 100
+    new_rank: int = data["exp"] // 10
     if data["rank"] != new_rank:
         data["rank"] = new_rank
         update(data)
@@ -105,8 +105,7 @@ async def chat(interaction: discord.interactions.Interaction) -> None:
             data["lonely-list"].append(str(interaction.user))
             response = "You're now part of the lonely list. ❤️"
 
-        f.seek(0)
-        json.dump(data, f)
+        update(data)
 
     await interaction.response.send_message(response)
 
@@ -117,21 +116,33 @@ async def chat(interaction: discord.interactions.Interaction) -> None:
     guild=discord.Object(id=GUILD_ID)
 )
 async def rank(interaction: discord.interactions.Interaction) -> None:
-    data = json.load(open('database.json', 'r'))
+    with open('database.json', 'r') as f:
+        data = json.load(f)
 
     await interaction.response.send_message(f"You're currently at rank {data['rank']}.")
 
 
+@tree.command(
+    name="stats",
+    description="Check your current stats.",
+    guild=discord.Object(id=GUILD_ID)
+)
+async def stats(interaction: discord.interactions.Interaction) -> None:
+    with open('database.json', 'r') as f:
+        data = json.load(f)
+
+    response = f"""
+> **User**: {interaction.user}
+> - **Experience Points:** {data['exp']}
+> - **Rank:** {data['rank']}
+"""
+
+    await interaction.response.send_message(response)
+
+
 # MAIN ENTRY POINT
 def main() -> None:
-    # Reset database
-    with open('database.json', 'w') as f:
-        json.dump({
-            "lonely-list": [],
-            "exp": 0,
-            "rank": 0
-        }, f)
-        f.seek(0)
+    update({"lonely-list": [], "exp": 0, "rank": 0})
 
     print("Bot is starting...")
     try:
