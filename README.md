@@ -4,7 +4,7 @@
  <img src="https://github.com/discordjs/guide/blob/main/guide/images/branding/banner-blurple-small.png" title="discord.js Guide" alt="discord.js Guide" />
 </div>
 
-[![Discord.js Guide](https://discordjs.guide/)](https://discordjs.guide/)
+Original discord.js guide: [https://discordjs.guide/](https://discordjs.guide/)
 
 ## Introduction
 
